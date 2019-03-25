@@ -44,7 +44,7 @@ class DirectusPermissionsTableGateway extends RelationalTableGateway
 
         $subSelect = new Select(['ur' => 'directus_user_roles']);
         $subSelect->where->equalTo('user', $userId);
-        $subSelect->limit(1);
+        //$subSelect->limit(1);
 
         $select->join(
             ['ur' => $subSelect],
@@ -74,19 +74,55 @@ class DirectusPermissionsTableGateway extends RelationalTableGateway
         return $this->parsePermissions($result);
     }
 
-    protected function parsePermissions($result)
+     protected function parsePermissions($result)
     {
-        $permissionsByCollection = [];
+        $permissionsByCollectionTemp = [];
+		$permissionsByCollection = [];
+		$levels=["none", "mine", "role", "full"];
         foreach ($result as $permission) {
             foreach ($permission as $field => &$value) {
+			
                 if (in_array($field, ['read_field_blacklist', 'write_field_blacklist'])) {
                     $value = array_filter(explode(',', $value));
                 }
             }
-
-            $permissionsByCollection[$permission['collection']][] = $this->parseRecord($permission);
+            $permissionsByCollectionTemp[$permission['collection']][] = $this->parseRecord($permission);
         }
+		
+		foreach($permissionsByCollectionTemp as $collection){
+			foreach($collection as $permission){
+				if(@!$permissionsByCollection[$permission['collection']]){
+					$permissionsByCollection[$permission['collection']]=[];
+				}
+				$match = false;
+				foreach($permissionsByCollection[$permission['collection']] as &$perm){
+					if($perm['status'] == $permission['status']){
+						
+						$match = true;
+						////echo array_search($permission['create'], $levels);
+						//echo array_search($perm['create'], $levels);
+						if(array_search($permission['create'], $levels) > array_search($perm['create'], $levels)){
+							$perm['create'] = $permission['create'];
+						}
+						if(array_search($permission['update'], $levels) > array_search($perm['update'], $levels)){
+							$perm['update'] = $permission['update'];
+						}
+						if(array_search($permission['read'], $levels) > array_search($perm['read'], $levels)){
+							$perm['read'] = $permission['read'];
+						}
+						if(array_search($permission['delete'], $levels) > array_search($perm['delete'], $levels)){
+							$perm['delete'] = $permission['delete'];
+						}
 
+					}
+				}
+				if(!$match){
+					$permissionsByCollection[$permission['collection']][]=$permission;
+				}
+			}
+		}
+				
+		//echo json_encode($permissionsByCollection['clients']);
         return $permissionsByCollection;
     }
 
